@@ -1,0 +1,32 @@
+appId: com.dahia.chat
+productName: Dahia Chat
+directories:
+  buildResources: build
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+asarUnpack:
+  - 'node_modules/sql.js/dist/sql-wasm.wasm'
+# Llave y config horneadas para que la app funcione al instalar (opcional).
+# Crea build/dahia-defaults.json (copiando el .example) antes de `npm run dist`.
+extraResources:
+  - from: build/dahia-defaults.json
+    to: dahia-defaults.json
+win:
+  target:
+    - nsis
+  icon: build/icon.png
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: Dahia Chat
+# Auto-actualización: dónde busca la app las versiones nuevas.
+publish:
+  provider: github
+  owner: dayanaceballosu-pixel
+  repo: Dahia-Chat
+  releaseType: release

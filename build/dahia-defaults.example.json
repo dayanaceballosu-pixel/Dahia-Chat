@@ -1,0 +1,7 @@
+{
+  "_INSTRUCCIONES": "Copia este archivo a 'dahia-defaults.json' (mismo folder) y pon la llave real de OpenRouter de la clienta antes de construir el .exe con 'npm run dist'. Este archivo (dahia-defaults.json) NO se sube a git. Así la app funciona al instalar, sin que ella configure nada.",
+  "engine": "api",
+  "apiKey": "sk-or-v1-PON_AQUI_LA_LLAVE_DE_ELLA",
+  "apiModel": "thedrummer/cydonia-24b-v4.1",
+  "apiClassifierModel": "mistralai/ministral-14b-2512"
+}

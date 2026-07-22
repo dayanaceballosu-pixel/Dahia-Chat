@@ -1,0 +1,82 @@
+/* ===== Dahia Chat — Tema rosa pastel + glassmorphism (claro / oscuro) ===== */
+
+:root {
+  --radius: 18px;
+  --radius-sm: 12px;
+  --font: 'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif;
+  --shadow-glass: 0 8px 32px rgba(214, 51, 132, 0.15);
+  --transition: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ---------- MODO CLARO ---------- */
+:root,
+[data-theme='light'] {
+  --bg-1: #ffe3f1;
+  --bg-2: #fff2f9;
+  --bg-3: #ffd9ec;
+  --glass: rgba(255, 255, 255, 0.55);
+  --glass-strong: rgba(255, 255, 255, 0.78);
+  --glass-border: rgba(255, 255, 255, 0.7);
+  --primary: #ff5aa0;
+  --primary-soft: #ff8fc0;
+  --primary-ghost: rgba(255, 90, 160, 0.12);
+  --text: #5a2340;
+  --text-muted: #b06a8c;
+  --bubble-client: rgba(255, 255, 255, 0.85);
+  --bubble-her: linear-gradient(135deg, #ff8fc0, #ff5aa0);
+  --bubble-her-text: #ffffff;
+  --tag-bg: rgba(255, 90, 160, 0.14);
+}
+
+/* ---------- MODO OSCURO (rosadita nocturna) ---------- */
+[data-theme='dark'] {
+  --bg-1: #2a1622;
+  --bg-2: #3a1e30;
+  --bg-3: #24121d;
+  --glass: rgba(255, 180, 214, 0.08);
+  --glass-strong: rgba(255, 180, 214, 0.14);
+  --glass-border: rgba(255, 180, 214, 0.18);
+  --primary: #ff8fc0;
+  --primary-soft: #ffb0d4;
+  --primary-ghost: rgba(255, 143, 192, 0.16);
+  --text: #ffe6f2;
+  --text-muted: #cf9bb6;
+  --bubble-client: rgba(255, 255, 255, 0.1);
+  --bubble-her: linear-gradient(135deg, #ff6faf, #ff4f97);
+  --bubble-her-text: #ffffff;
+  --tag-bg: rgba(255, 143, 192, 0.2);
+  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.35);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font);
+  color: var(--text);
+  background: linear-gradient(135deg, var(--bg-1) 0%, var(--bg-2) 50%, var(--bg-3) 100%);
+  background-attachment: fixed;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--primary-ghost);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-soft);
+}

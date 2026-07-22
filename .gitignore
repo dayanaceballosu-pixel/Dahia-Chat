@@ -1,0 +1,8 @@
+node_modules/
+out/
+dist/
+models/
+*.log
+.DS_Store
+# Llave/config horneada por instalación (contiene la API key real) — nunca subir
+build/dahia-defaults.json
