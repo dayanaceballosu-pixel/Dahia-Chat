@@ -1,6 +1,6 @@
 {
   "name": "dahia-chat",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Dahia Chat — asistente copiloto de respuestas con IA local",
   "author": "Sinfi",
   "main": "./out/main/index.js",

@@ -749,14 +749,30 @@ function isSkipLine(l: string): boolean {
 }
 
 function segmentChaturbate(raw: string, clientName: string): SegMsg[] {
-  const user = (clientName || '').toLowerCase().trim()
+  const lines = raw.split('\n').map((x) => x.trim())
+  const stripDecor = (l: string): string => l.toLowerCase().replace(/[^\p{L}\p{N}_]/gu, '')
+  const user = stripDecor(clientName || '')
+
+  // Cuenta tokens candidatos a marcador (líneas de UNA palabra que se repiten): así
+  // detecta la inicial ("N") o el nombre completo ("nobi74") aunque no lo sepamos de antemano.
+  const counts: Record<string, number> = {}
+  for (const l of lines) {
+    if (!l || isSkipLine(l) || /\s/.test(l)) continue
+    const t = stripDecor(l)
+    if (t) counts[t] = (counts[t] || 0) + 1
+  }
+  const isMarker = (l: string, t: string): boolean => {
+    if (user && t === user) return true // el nombre del cliente (aunque traiga ⭐ o espacios)
+    if (/\s/.test(l)) return false // los marcadores son de una sola palabra
+    // una sola letra (inicial), o un token tipo usuario (con dígito/_) que se repite
+    return /^[\p{L}]$/u.test(t) || ((counts[t] || 0) >= 2 && /[0-9_]/.test(t))
+  }
+
   const msgs: SegMsg[] = []
   let pending = false
-  for (const rawLine of raw.split('\n')) {
-    const l = rawLine.trim()
-    if (isSkipLine(l)) continue
-    // Marca del cliente: una sola letra (su inicial) o su nombre de usuario en su propia línea.
-    if (/^[A-Za-z]$/.test(l) || (user && l.toLowerCase() === user)) {
+  for (const l of lines) {
+    if (!l || isSkipLine(l)) continue
+    if (isMarker(l, stripDecor(l))) {
       pending = true
       continue
     }
