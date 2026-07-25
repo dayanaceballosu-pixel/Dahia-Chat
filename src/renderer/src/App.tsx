@@ -32,6 +32,15 @@ export default function App(): JSX.Element {
   const [toast, setToast] = useState('')
   const [engine, setEngine] = useState<'local' | 'api'>('local')
   const [copPerUsd, setCopPerUsd] = useState(4100)
+  const [version, setVersion] = useState('')
+
+  // Versión de la app → título de la ventana + barra lateral
+  useEffect(() => {
+    window.dahia.appVersion?.().then((v) => {
+      setVersion(v)
+      document.title = `Dahia Chat v${v}`
+    })
+  }, [])
   const [usageNonce, setUsageNonce] = useState(0) // sube tras cada generación → refresca el contador
 
   // Cargar config (motor local/API y tasa de pesos) para el contador de gasto
@@ -209,6 +218,7 @@ export default function App(): JSX.Element {
         engine={engine}
         copPerUsd={copPerUsd}
         usageNonce={usageNonce}
+        version={version}
         onQuery={setQuery}
         onSelect={handleSelect}
         onNew={() => setShowNewChat(true)}

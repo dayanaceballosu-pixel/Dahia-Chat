@@ -11,6 +11,7 @@ interface Props {
   engine: 'local' | 'api'
   copPerUsd: number
   usageNonce: number
+  version?: string
   onQuery: (q: string) => void
   onSelect: (id: string) => void
   onNew: () => void
@@ -33,6 +34,7 @@ export function Sidebar({
   engine,
   copPerUsd,
   usageNonce,
+  version,
   onQuery,
   onSelect,
   onNew,
@@ -93,7 +95,22 @@ export function Sidebar({
       <div className="brand">
         <img src={logo} alt="Dahia" />
         <div style={{ flex: 1 }}>
-          <h1>Dahia Chat</h1>
+          <h1>
+            Dahia Chat
+            {version && (
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: 'var(--primary)',
+                  marginLeft: 6,
+                  verticalAlign: 'middle'
+                }}
+              >
+                v{version}
+              </span>
+            )}
+          </h1>
           <small>Tu copiloto de respuestas</small>
         </div>
         <button className="icon-btn" title="Compactar" onClick={onToggleCollapse}>

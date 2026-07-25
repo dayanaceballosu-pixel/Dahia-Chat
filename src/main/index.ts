@@ -46,7 +46,7 @@ function createWindow(): void {
     show: false,
     autoHideMenuBar: true,
     backgroundColor: '#ffeaf4',
-    title: 'Dahia Chat',
+    title: `Dahia Chat v${app.getVersion()}`,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -169,6 +169,9 @@ app.whenReady().then(async () => {
     db.addMenuItem(name, price, description)
   )
   ipcMain.handle('db:deleteMenuItem', (_e, id: string) => db.deleteMenuItem(id))
+
+  // IPC: versión de la app (para mostrarla en la UI)
+  ipcMain.handle('app:version', () => app.getVersion())
 
   // IPC: configuración
   ipcMain.handle('settings:get', () => getSettings())

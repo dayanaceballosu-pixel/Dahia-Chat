@@ -101,6 +101,9 @@ const api = {
   }
 }
 
-contextBridge.exposeInMainWorld('dahia', api)
+// Versión de la app (para mostrarla en la interfaz)
+const apiWithVersion = { ...api, appVersion: (): Promise<string> => ipcRenderer.invoke('app:version') }
 
-export type DahiaApi = typeof api
+contextBridge.exposeInMainWorld('dahia', apiWithVersion)
+
+export type DahiaApi = typeof apiWithVersion
