@@ -25,7 +25,7 @@ export function ImportModal({ clientId, clientName, onClose, onDone }: Props): J
     } else if (res.error === 'api-key-missing' || res.error === 'model-not-found') {
       setError('Configura primero el motor de IA en Ajustes ⚙️.')
     } else if (res.error) {
-      setError('Ups, hubo un problema al importar. Intenta de nuevo.')
+      setError('No se pudo importar. Motivo: ' + res.error)
     } else {
       onDone(res.count ?? 0)
     }

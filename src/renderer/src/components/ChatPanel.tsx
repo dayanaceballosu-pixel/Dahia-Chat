@@ -130,13 +130,11 @@ export function ChatPanel({
       setError('Falta la llave de OpenRouter o no es válida. Revísala en Ajustes ⚙️.')
     } else if (res.error === 'api-no-credit') {
       setError('Se acabó el crédito de OpenRouter. Recárgalo para seguir generando.')
-    } else if (res.error === 'api-timeout' || res.error?.startsWith('api-')) {
-      setError('Los servidores de IA están saturados ahora mismo. Intenta de nuevo en unos segundos.')
     } else if (res.needFact) {
       // El cliente pregunta un dato de ella que no sabemos → se lo pedimos a ella.
       onNeedFact?.(text, res.needFact)
     } else if (res.error) {
-      setError('Ups, la IA tuvo un problema. Intenta de nuevo.')
+      setError('No se pudo generar. Motivo: ' + res.error)
     } else {
       setSuggestions(res.suggestions ?? [])
       setTranslations(res.translations ?? [])

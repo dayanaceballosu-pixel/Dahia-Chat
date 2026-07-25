@@ -72,6 +72,7 @@ interface ApiOpts {
   topK?: number
   repetitionPenalty?: number
   maxTokens: number
+  timeoutMs?: number // por defecto 10s (chat en vivo); import usa más
 }
 
 // Acumulador de consumo: cada llamada a la API suma aquí su costo/tokens. index.ts
@@ -136,10 +137,9 @@ async function apiChat(model: string, messages: ChatMsg[], opts: ApiOpts, s: Set
   if (opts.repetitionPenalty) body.repetition_penalty = opts.repetitionPenalty
   if (opts.topK) body.top_k = opts.topK
 
-  // Timeout: si el modelo tarda más de 10s, abortamos y saltamos al respaldo
-  // (nunca "pensando" eterno). Un proveedor sano responde en 2-6s.
+  // Timeout: si el modelo tarda demasiado, abortamos (nunca "pensando" eterno).
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 10000)
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 10000)
   let res: Response
   try {
     res = await fetch(`${base}/chat/completions`, {
@@ -154,8 +154,8 @@ async function apiChat(model: string, messages: ChatMsg[], opts: ApiOpts, s: Set
       signal: controller.signal
     })
   } catch (e) {
-    if ((e as Error)?.name === 'AbortError') throw new Error('api-timeout')
-    throw e
+    if ((e as Error)?.name === 'AbortError') throw new Error(`tardó demasiado (timeout) con ${model}`)
+    throw new Error(`sin conexión con la IA (${(e as Error)?.message || 'red'})`)
   } finally {
     clearTimeout(timer)
   }
@@ -164,7 +164,8 @@ async function apiChat(model: string, messages: ChatMsg[], opts: ApiOpts, s: Set
     const t = await res.text().catch(() => '')
     if (res.status === 401) throw new Error('api-key-invalid')
     if (res.status === 402) throw new Error('api-no-credit')
-    throw new Error(`api-${res.status}: ${t.slice(0, 300)}`)
+    if (res.status === 429) throw new Error(`límite de uso (429) en ${model}`)
+    throw new Error(`error ${res.status} en ${model}: ${t.replace(/\s+/g, ' ').slice(0, 160)}`)
   }
   const data = (await res.json()) as {
     choices?: { message?: { content?: string } }[]
@@ -179,7 +180,7 @@ async function apiChat(model: string, messages: ChatMsg[], opts: ApiOpts, s: Set
     pendingUsage.calls += 1
   }
   const content = data?.choices?.[0]?.message?.content
-  if (!content) throw new Error('api-empty')
+  if (!content) throw new Error(`${model} respondió vacío`)
   return content
 }
 
@@ -711,7 +712,7 @@ async function runImportModel(model: string, sys: string, input: string, s: Sett
         { role: 'system', content: sys },
         { role: 'user', content: input }
       ],
-      { temperature: 0, maxTokens: 4000 },
+      { temperature: 0, maxTokens: 4000, timeoutMs: 40000 }, // importar puede tardar más
       s
     )
   }
@@ -838,8 +839,12 @@ export async function parseConversation(
   if (!msgs.length) return []
   const hasMarks = msgs.some((m) => m.marked)
 
-  // 2) Idioma de cada mensaje (para decidir bilingüe).
-  await detectLangsPerMessage(msgs, s)
+  // 2) Idioma de cada mensaje (best-effort: si falla, seguimos por iniciales).
+  try {
+    await detectLangsPerMessage(msgs, s)
+  } catch {
+    /* sin idioma: si hay iniciales, igual se atribuye bien */
+  }
 
   const langCounts: Record<string, number> = {}
   for (const m of msgs) if (m.lang) langCounts[m.lang] = (langCounts[m.lang] || 0) + 1
@@ -860,16 +865,23 @@ export async function parseConversation(
   // Sin marcas: si es bilingüe, por idioma; si no, por rol.
   const bilingual = sortedL.length >= 2 && sortedL[1][1] >= msgs.length * 0.2
   if (bilingual) {
-    let clientLang = await detectClientLang(raw, s)
+    let clientLang = ''
+    try {
+      clientLang = await detectClientLang(raw, s)
+    } catch {
+      /* usa el más frecuente */
+    }
     if (!clientLang || !(clientLang in langCounts)) clientLang = sortedL[0][0]
     return msgs.map((m) => ({ from: m.lang === clientLang ? 'client' : 'her', text: m.text }))
   }
-  return attributeBySender(
-    msgs.map((m) => m.text),
-    personaName,
-    clientName,
-    s
-  )
+  // Un idioma sin marcas: por rol. Si falla, alterna (nunca revienta si hay mensajes).
+  try {
+    const byRole = await attributeBySender(msgs.map((m) => m.text), personaName, clientName, s)
+    if (byRole.length) return byRole
+  } catch {
+    /* cae a la alternancia */
+  }
+  return msgs.map((m, i) => ({ from: i % 2 === 0 ? 'client' : 'her', text: m.text }))
 }
 
 // Parte un texto en trozos por líneas, cada uno de ~maxChars (respeta líneas enteras).
