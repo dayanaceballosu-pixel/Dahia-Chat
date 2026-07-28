@@ -6,6 +6,11 @@ import { existsSync, readFileSync, writeFileSync } from 'fs'
 
 export interface Settings {
   personaName: string
+  // Su nombre/usuario tal como sale en el chat de la plataforma (para reconocer
+  // SUS mensajes al pegar una conversación). Si está vacío se usa personaName.
+  platformName: string
+  // Mantener la ventana siempre encima de las demás (el "pin" 📌)
+  alwaysOnTop: boolean
   personalityPrompt: string
   suggestionCount: number
   engine: 'local' | 'api'
@@ -21,6 +26,8 @@ export interface Settings {
 
 const DEFAULTS: Settings = {
   personaName: 'Dahia',
+  platformName: '',
+  alwaysOnTop: false,
   personalityPrompt:
     'Eres una chica coqueta, dulce y con chispa. Te encanta hacer sentir especial a quien te escribe, ' +
     'seguir el juego según el ánimo del usuario y crear conexión. Hablas natural, como una persona real.',

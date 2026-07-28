@@ -3,14 +3,16 @@ import { useState } from 'react'
 interface Props {
   clientId: string
   clientName: string
+  initialText?: string // texto ya pegado (viene del cajón del chat)
   onClose: () => void
-  onDone: (count: number) => void
+  // pending: últimos mensajes del cliente sin responder (para generar de una vez)
+  onDone: (count: number, pending?: string) => void
 }
 
 // Pega una conversación larga previa → la IA la estructura (quién dijo qué) y queda
 // como historial/contexto de ese cliente.
-export function ImportModal({ clientId, clientName, onClose, onDone }: Props): JSX.Element {
-  const [text, setText] = useState('')
+export function ImportModal({ clientId, clientName, initialText, onClose, onDone }: Props): JSX.Element {
+  const [text, setText] = useState(initialText ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -27,7 +29,7 @@ export function ImportModal({ clientId, clientName, onClose, onDone }: Props): J
     } else if (res.error) {
       setError('No se pudo importar. Motivo: ' + res.error)
     } else {
-      onDone(res.count ?? 0)
+      onDone(res.count ?? 0, res.pending)
     }
   }
 
@@ -59,7 +61,8 @@ export function ImportModal({ clientId, clientName, onClose, onDone }: Props): J
           <span className="hint">
             Incluye ambos lados (lo que él escribió y lo que tú respondiste). No importa el formato ni
             el largo: puedes pegar la conversación <b>completa</b> (si es muy larga, tarda unos
-            segundos más).
+            segundos más). Tip: pon tu <b>nombre en la plataforma</b> en Ajustes ⚙️ para que la
+            separación de quién dijo qué sea exacta.
           </span>
         </div>
 

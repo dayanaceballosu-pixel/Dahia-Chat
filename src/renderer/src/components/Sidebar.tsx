@@ -12,6 +12,8 @@ interface Props {
   copPerUsd: number
   usageNonce: number
   version?: string
+  pinned?: boolean // 📌 ventana fijada siempre encima
+  onTogglePin?: () => void
   onQuery: (q: string) => void
   onSelect: (id: string) => void
   onNew: () => void
@@ -35,6 +37,8 @@ export function Sidebar({
   copPerUsd,
   usageNonce,
   version,
+  pinned,
+  onTogglePin,
   onQuery,
   onSelect,
   onNew,
@@ -53,6 +57,14 @@ export function Sidebar({
           ☰
         </button>
         <img className="mini-logo" src={logo} alt="Dahia" onClick={onToggleCollapse} />
+        <button
+          className="icon-btn"
+          title={pinned ? 'Soltar: dejar de estar siempre visible' : 'Fijar: siempre visible sobre las demás ventanas'}
+          onClick={onTogglePin}
+          style={pinned ? { background: 'var(--primary)', color: '#fff' } : undefined}
+        >
+          📌
+        </button>
         <button className="icon-btn accent" title="Nuevo chat" onClick={onNew}>
           ＋
         </button>
@@ -113,6 +125,14 @@ export function Sidebar({
           </h1>
           <small>Tu copiloto de respuestas</small>
         </div>
+        <button
+          className="icon-btn"
+          title={pinned ? 'Soltar: dejar de estar siempre visible' : 'Fijar: siempre visible sobre las demás ventanas'}
+          onClick={onTogglePin}
+          style={pinned ? { background: 'var(--primary)', color: '#fff' } : undefined}
+        >
+          📌
+        </button>
         <button className="icon-btn" title="Compactar" onClick={onToggleCollapse}>
           «
         </button>

@@ -33,6 +33,9 @@ export default function App(): JSX.Element {
   const [engine, setEngine] = useState<'local' | 'api'>('local')
   const [copPerUsd, setCopPerUsd] = useState(4100)
   const [version, setVersion] = useState('')
+  const [pinned, setPinned] = useState(false) // 📌 ventana siempre encima
+  const [herNames, setHerNames] = useState<string[]>([]) // sus nombres (para reconocer conversaciones pegadas)
+  const [importText, setImportText] = useState('') // texto pre-cargado del modal de importar
 
   // Versión de la app → título de la ventana + barra lateral
   useEffect(() => {
@@ -43,18 +46,31 @@ export default function App(): JSX.Element {
   }, [])
   const [usageNonce, setUsageNonce] = useState(0) // sube tras cada generación → refresca el contador
 
-  // Cargar config (motor local/API y tasa de pesos) para el contador de gasto
+  // Cargar config (motor local/API, tasa de pesos y nombres de ella)
   const loadConfig = async (): Promise<void> => {
     const cfg = (await window.dahia.settings.get()) as {
       engine?: 'local' | 'api'
       copPerUsd?: number
+      personaName?: string
+      platformName?: string
     }
     setEngine(cfg.engine ?? 'local')
     setCopPerUsd(cfg.copPerUsd ?? 4100)
+    setHerNames([cfg.platformName || '', cfg.personaName || ''].filter(Boolean))
   }
   useEffect(() => {
     loadConfig()
+    window.dahia.getAlwaysOnTop?.().then(setPinned)
   }, [])
+
+  // 📌 Fijar/soltar la ventana siempre encima (se recuerda entre sesiones)
+  const togglePin = async (): Promise<void> => {
+    const next = !pinned
+    setPinned(next)
+    await window.dahia.setAlwaysOnTop(next)
+    setToast(next ? '📌 Fijada: siempre visible sobre las demás ventanas' : 'Ventana normal')
+    showToast()
+  }
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -219,6 +235,8 @@ export default function App(): JSX.Element {
         copPerUsd={copPerUsd}
         usageNonce={usageNonce}
         version={version}
+        pinned={pinned}
+        onTogglePin={togglePin}
         onQuery={setQuery}
         onSelect={handleSelect}
         onNew={() => setShowNewChat(true)}
@@ -238,6 +256,11 @@ export default function App(): JSX.Element {
         onGenerated={() => setUsageNonce((n) => n + 1)}
         onNeedFact={(clientMsg, label) => setNeedFact({ clientMsg, label })}
         onImport={() => setShowImport(true)}
+        onImportText={(text) => {
+          setImportText(text)
+          setShowImport(true)
+        }}
+        herNames={herNames}
         onFlipMessage={handleFlipMessage}
       />
 
@@ -296,11 +319,23 @@ export default function App(): JSX.Element {
         <ImportModal
           clientId={activeClient.id}
           clientName={activeClient.username}
-          onClose={() => setShowImport(false)}
-          onDone={async (count) => {
+          initialText={importText}
+          onClose={() => {
             setShowImport(false)
+            setImportText('')
+          }}
+          onDone={async (count, pending) => {
+            setShowImport(false)
+            setImportText('')
             await refresh()
-            setToast(`📥 Importado: ${count} mensajes de contexto`)
+            if (pending) {
+              // La conversación terminaba con mensajes del cliente sin responder:
+              // se generan sugerencias para ese mensaje de una vez.
+              setToast(`📥 Importado: ${count} mensajes · generando respuesta...`)
+              setPrefill({ text: pending, nonce: performance.now() })
+            } else {
+              setToast(`📥 Importado: ${count} mensajes de contexto`)
+            }
             showToast()
           }}
         />

@@ -24,6 +24,11 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   shortcutName: Dahia Chat
+linux:
+  target:
+    - AppImage
+  category: Utility
+  icon: build/icon.png
 # Auto-actualización: dónde busca la app las versiones nuevas.
 publish:
   provider: github

@@ -6,6 +6,10 @@ const api = {
   copyToClipboard: (text: string): Promise<boolean> =>
     ipcRenderer.invoke('clipboard:write', text),
   readClipboard: (): Promise<string> => ipcRenderer.invoke('clipboard:read'),
+  // El "pin" 📌: mantener la ventana siempre encima de las demás
+  setAlwaysOnTop: (value: boolean): Promise<boolean> =>
+    ipcRenderer.invoke('window:setAlwaysOnTop', value),
+  getAlwaysOnTop: (): Promise<boolean> => ipcRenderer.invoke('window:getAlwaysOnTop'),
   // Escuchar el atajo global (texto capturado)
   onQuickCapture: (cb: (text: string) => void): (() => void) => {
     const listener = (_e: unknown, text: string): void => cb(text)
@@ -79,11 +83,12 @@ const api = {
       needFact?: string
       error?: string
     }> => ipcRenderer.invoke('ai:generate', clientId, incoming),
-    // Importar una conversación pegada (la IA la estructura como historial)
+    // Importar una conversación pegada (la IA la estructura como historial).
+    // `pending`: últimos mensajes del cliente SIN responder (para generar de una vez).
     importConversation: (
       clientId: string,
       raw: string
-    ): Promise<{ count?: number; error?: string }> =>
+    ): Promise<{ count?: number; pending?: string; error?: string }> =>
       ipcRenderer.invoke('ai:importConversation', clientId, raw),
     // Saldo/consumo de la llave (contador de gasto)
     credit: (): Promise<{

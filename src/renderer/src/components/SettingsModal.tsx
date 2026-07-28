@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 interface Settings {
   personaName: string
+  platformName: string
   personalityPrompt: string
   suggestionCount: number
   engine: 'local' | 'api'
@@ -112,6 +113,7 @@ export function SettingsModal({ onClose, onSaved }: Props): JSX.Element {
     if (!s) return
     await window.dahia.settings.set({
       personaName: s.personaName,
+      platformName: s.platformName,
       personalityPrompt: s.personalityPrompt,
       suggestionCount: Number(s.suggestionCount) || 3,
       engine: s.engine,
@@ -222,6 +224,21 @@ export function SettingsModal({ onClose, onSaved }: Props): JSX.Element {
             value={s.personaName}
             onChange={(e) => setS({ ...s, personaName: e.target.value })}
           />
+        </div>
+
+        <div className="field">
+          <label>Tu nombre en la plataforma (como sale en el chat)</label>
+          <input
+            type="text"
+            placeholder="Ej. dahia_rose (déjalo vacío si es igual al nombre del personaje)"
+            value={s.platformName ?? ''}
+            onChange={(e) => setS({ ...s, platformName: e.target.value })}
+          />
+          <span className="hint">
+            Se usa al <b>pegar conversaciones completas</b>: con tu nombre y el del cliente (el del
+            chat), la app separa sola quién dijo qué — sin que tengas que seleccionar mensaje por
+            mensaje.
+          </span>
         </div>
 
         <div className="field">

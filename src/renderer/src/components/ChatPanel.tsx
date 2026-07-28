@@ -32,7 +32,34 @@ interface Props {
   onGenerated?: () => void // avisa a la app para refrescar el contador de gasto
   onNeedFact?: (clientMsg: string, label: string) => void // pedir un dato real de ella
   onImport?: () => void // abrir el modal de importar conversación
+  onImportText?: (text: string) => void // abrir el modal de importar con texto ya pegado
+  herNames?: string[] // nombres de ella (plataforma/personaje) para reconocer conversaciones pegadas
   onFlipMessage?: (messageId: string) => void // corregir de qué lado es un mensaje
+}
+
+// ¿Lo pegado parece una CONVERSACIÓN completa (varios mensajes de ambos) y no un
+// solo mensaje del cliente? Señales: líneas que son solo un nombre o "Nombre:",
+// horas tipo "9:41", o un bloque grande de muchas líneas.
+function looksLikeConversation(text: string, names: string[]): boolean {
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean)
+  if (lines.length < 3) return false
+  const lowNames = names.map((n) => n.toLowerCase().trim()).filter(Boolean)
+  let nameLines = 0
+  let timeLines = 0
+  const singles: Record<string, number> = {}
+  for (const l of lines) {
+    const ll = l.toLowerCase()
+    if (
+      lowNames.some((n) => ll === n || ll.startsWith(n + ':')) ||
+      /^(yo|ella|él|el|cliente|usuario)\s*:/.test(ll)
+    )
+      nameLines++
+    if (/^\d{1,2}:\d{2}(\s*(a|p)\.?\s*m\.?)?$/i.test(l)) timeLines++
+    if (/^\S{1,20}$/.test(l)) singles[ll] = (singles[ll] || 0) + 1 // posible marcador repetido
+  }
+  if (nameLines >= 2 || timeLines >= 2) return true
+  if (Object.values(singles).some((c) => c >= 2) && lines.length >= 5) return true
+  return lines.length >= 8
 }
 
 export function ChatPanel({
@@ -45,6 +72,8 @@ export function ChatPanel({
   onGenerated,
   onNeedFact,
   onImport,
+  onImportText,
+  herNames = [],
   onFlipMessage
 }: Props): JSX.Element {
   const [incoming, setIncoming] = useState('')
@@ -56,6 +85,7 @@ export function ChatPanel({
   const [lastMs, setLastMs] = useState<number | null>(null) // tiempo de la última generación
   const [lastCost, setLastCost] = useState<number | null>(null) // costo USD de la última generación
   const [lastModel, setLastModel] = useState<string>('') // modelo que respondió
+  const [convoAsk, setConvoAsk] = useState('') // texto pegado que parece conversación completa
   const timerRef = useRef<number | undefined>(undefined)
 
   const stopTimer = (): void => {
@@ -76,6 +106,7 @@ export function ChatPanel({
     setLoading(false)
     setElapsed(0)
     setLastMs(null)
+    setConvoAsk('')
   }, [clientId])
 
   // Limpiar el cronómetro si el componente se desmonta
@@ -107,9 +138,17 @@ export function ChatPanel({
     )
   }
 
-  const generate = async (textArg?: string): Promise<void> => {
+  const generate = async (textArg?: string, skipConvoCheck = false): Promise<void> => {
     const text = (textArg ?? incoming).trim()
     if (!text || loading) return
+    // ¿Pegó la conversación COMPLETA (varios mensajes de ambos)? Mejor ordenarla e
+    // importarla como contexto que tratarla como un único mensaje del cliente.
+    if (!skipConvoCheck && onImportText && looksLikeConversation(text, [...herNames, client.username])) {
+      setIncoming(text)
+      setConvoAsk(text)
+      return
+    }
+    setConvoAsk('')
     setIncoming(text)
     setLoading(true)
     setError('')
@@ -234,6 +273,51 @@ export function ChatPanel({
           <div style={{ fontSize: 13, color: 'var(--primary)', padding: '4px 2px' }}>{error}</div>
         )}
 
+        {convoAsk && (
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 10px',
+              borderRadius: 12,
+              background: 'var(--bg)',
+              border: '1.5px dashed var(--primary)',
+              fontSize: 13
+            }}
+          >
+            <span style={{ flex: '1 1 100%' }}>
+              📋 Esto parece una <b>conversación completa</b>. ¿La ordeno (quién dijo qué) y la
+              guardo como contexto? Si termina con un mensaje de él sin responder, te genero la
+              respuesta de una vez.
+            </span>
+            <button
+              className="btn-new"
+              style={{ flex: 'none', padding: '8px 16px' }}
+              onClick={() => {
+                const t = convoAsk
+                setConvoAsk('')
+                setIncoming('')
+                onImportText?.(t)
+              }}
+            >
+              📥 Sí, ordenar e importar
+            </button>
+            <button
+              className="btn-ghost"
+              style={{ flex: 'none', padding: '8px 16px' }}
+              onClick={() => {
+                const t = convoAsk
+                setConvoAsk('')
+                generate(t, true)
+              }}
+            >
+              ✨ No, es un solo mensaje
+            </button>
+          </div>
+        )}
+
         {loading && (
           <div className="suggestions-label">
             ⏱️ Generando... {elapsed.toFixed(1)}s
@@ -263,7 +347,7 @@ export function ChatPanel({
               </span>
               <button
                 className="regen-btn"
-                onClick={() => generate(incoming)}
+                onClick={() => generate(incoming, true)}
                 disabled={loading}
                 title="Generar otras opciones"
               >

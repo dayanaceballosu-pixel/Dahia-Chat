@@ -481,6 +481,8 @@ function buildSystem(s: Settings, p: GenPayload, register: Register): string {
     'REGLAS SIEMPRE:',
     '• Responde DE VERDAD a lo que él dijo, a su contenido y su emoción. Nada enlatado.',
     '• COHERENCIA: sigue el HILO de la conversación de abajo. Responde a lo que se venía hablando; NO cambies de tema de golpe ni ignores el mensaje anterior. Si su mensaje se entiende por el contexto, respóndelo según ese contexto.',
+    '• NO TE REPITAS: antes de responder, revisa la conversación de abajo. NUNCA vuelvas a decir una idea, propuesta, halago o pregunta que ya se dijo (tuya o de él), ni con otras palabras. Lo ya dicho está ACORDADO: no lo re-propongas.',
+    '• AVANZA: si él responde con interés, acepta, o pregunta "¿qué?/¿cuál?/¿cómo?" sobre algo que TÚ ya propusiste, NO repitas la propuesta en general: da el SIGUIENTE paso con detalles concretos y nuevos (qué exactamente, cuándo, cómo). La conversación siempre debe moverse hacia adelante.',
     '• Voz fija: misma personalidad, mismo tono y mismo nivel de emoji.',
     '• NO espejes sus palabras (no repitas literal lo que él dijo): varía el vocabulario.',
     '• Frases cortas, sin monólogos, máximo un "!", sin MAYÚSCULAS de más. Emoji 0-1, natural.',
@@ -514,7 +516,7 @@ function buildCorrections(p: GenPayload): string {
 
 function buildUserPrompt(s: Settings, p: GenPayload, n: number): string {
   const hist = p.history
-    .slice(-10)
+    .slice(-16)
     .map((m) => `${m.from === 'client' ? 'Usuario' : s.personaName}: ${m.text}`)
     .join('\n')
   return [
@@ -522,7 +524,7 @@ function buildUserPrompt(s: Settings, p: GenPayload, n: number): string {
     hist ? `Conversación reciente:\n${hist}\n` : '',
     `El usuario acaba de escribirte: "${p.incoming}"`,
     '',
-    `Dame ${n} respuestas posibles COHERENTES con la conversación de arriba (responde a lo que se venía hablando, sin cambiar de tema), siguiendo EL MOMENTO indicado, en ${p.language} natural y correcto, con TU voz y sin repetir sus palabras. Cada una funciona sola y varía en las palabras.`,
+    `Dame ${n} respuestas posibles COHERENTES con la conversación de arriba (responde a lo que se venía hablando, sin cambiar de tema), siguiendo EL MOMENTO indicado, en ${p.language} natural y correcto, con TU voz y sin repetir sus palabras. NO repitas nada que ya se haya dicho en la conversación (ni tus propias propuestas ni sus ideas): si él muestra interés o pregunta por algo que ya propusiste, avanza con lo concreto siguiente. Cada una funciona sola y varía en las palabras.`,
     `Una por línea: "1) ...", "2) ...". Escribe SOLO las ${n} respuestas (lo que le dirías a él); NO repitas estas instrucciones ni describas tu personaje.`
   ]
     .filter((x) => x !== '')
@@ -736,6 +738,7 @@ async function runImportModel(model: string, sys: string, input: string, s: Sett
 interface SegMsg {
   text: string
   marked: boolean // venía precedido por la inicial del cliente
+  side?: 'client' | 'her' | null // atribución directa cuando aparecen AMBOS nombres
   lang?: string
 }
 
@@ -748,10 +751,11 @@ function isSkipLine(l: string): boolean {
   return !l || RE_DATE.test(l) || RE_DAYTIME.test(l) || RE_TIME.test(l) || RE_SYS.test(l)
 }
 
-function segmentChaturbate(raw: string, clientName: string): SegMsg[] {
+function segmentChaturbate(raw: string, clientName: string, herName = ''): SegMsg[] {
   const lines = raw.split('\n').map((x) => x.trim())
   const stripDecor = (l: string): string => l.toLowerCase().replace(/[^\p{L}\p{N}_]/gu, '')
   const user = stripDecor(clientName || '')
+  const her = stripDecor(herName || '')
 
   // Cuenta tokens candidatos a marcador (líneas de UNA palabra que se repiten): así
   // detecta la inicial ("N") o el nombre completo ("nobi74") aunque no lo sepamos de antemano.
@@ -761,6 +765,7 @@ function segmentChaturbate(raw: string, clientName: string): SegMsg[] {
     const t = stripDecor(l)
     if (t) counts[t] = (counts[t] || 0) + 1
   }
+  const isHerMarker = (t: string): boolean => !!her && t === her && her !== user
   const isMarker = (l: string, t: string): boolean => {
     if (user && t === user) return true // el nombre del cliente (aunque traiga ⭐ o espacios)
     if (/\s/.test(l)) return false // los marcadores son de una sola palabra
@@ -768,7 +773,32 @@ function segmentChaturbate(raw: string, clientName: string): SegMsg[] {
     return /^[\p{L}]$/u.test(t) || ((counts[t] || 0) >= 2 && /[0-9_]/.test(t))
   }
 
+  // ¿Aparece TAMBIÉN el nombre de ella como línea suelta? Entonces el formato trae
+  // ambos nombres → atribución directa "pegajosa": cada nombre manda hasta que
+  // aparezca el otro (un lado puede enviar varios mensajes seguidos).
+  const bothNames = !!her && lines.some((l) => isHerMarker(stripDecor(l)))
+
   const msgs: SegMsg[] = []
+  if (bothNames) {
+    let side: 'client' | 'her' | null = null
+    for (const l of lines) {
+      if (!l || isSkipLine(l)) continue
+      const t = stripDecor(l)
+      if (isHerMarker(t)) {
+        side = 'her'
+        continue
+      }
+      if (isMarker(l, t)) {
+        side = 'client'
+        continue
+      }
+      // Antes del primer nombre no sabemos de quién es: en estos formatos casi no
+      // pasa (solo encabezados, ya filtrados); se atribuye a ella por defecto.
+      msgs.push({ text: l, marked: side === 'client', side: side ?? 'her' })
+    }
+    return msgs
+  }
+
   let pending = false
   for (const l of lines) {
     if (!l || isSkipLine(l)) continue
@@ -780,6 +810,43 @@ function segmentChaturbate(raw: string, clientName: string): SegMsg[] {
     pending = false
   }
   return msgs
+}
+
+// Formato "Nombre: mensaje" en la MISMA línea (WhatsApp, copias manuales, "Yo:/Él:").
+// Si la mayoría de las líneas traen prefijo reconocible, se atribuye SIN llamar a la IA.
+function parseInlineNames(
+  raw: string,
+  herName: string,
+  clientName: string
+): { from: 'client' | 'her'; text: string }[] | null {
+  const her = (herName || '').toLowerCase().trim()
+  const client = (clientName || '').toLowerCase().trim()
+  const res: { from: 'client' | 'her'; text: string }[] = []
+  let content = 0 // líneas con contenido real (no fecha/hora/sistema)
+  let matched = 0
+  for (const rawLine of raw.split('\n')) {
+    const line = rawLine.replace(/^[\s>*\-–—•#]+/, '').replace(/\*\*|__/g, '').trim()
+    if (!line || isSkipLine(line)) continue
+    content++
+    const m = line.match(/^([^:]{1,40}?)\s*:\s*(.+)$/)
+    if (m) {
+      const label = m[1].toLowerCase().trim()
+      const text = m[2].trim()
+      let from: 'client' | 'her' | null = null
+      if (/^(cliente|client|usuario|user|él|el|he|him)\b/.test(label) || (client && label.includes(client)))
+        from = 'client'
+      else if (/^(ella|her|yo|me|she)\b/.test(label) || (her && label.includes(her))) from = 'her'
+      if (from && text) {
+        res.push({ from, text })
+        matched++
+        continue
+      }
+    }
+    // Línea sin prefijo: continuación del mensaje anterior (mensajes multilínea)
+    if (res.length) res[res.length - 1].text += '\n' + line
+  }
+  // Solo confiamos si el formato es claramente "Nombre: mensaje" (≥60% de las líneas)
+  return content >= 3 && matched >= Math.ceil(content * 0.6) ? res : null
 }
 
 // Detecta el idioma de cada mensaje (por lotes). Tarea simple para el modelo.
@@ -850,9 +917,19 @@ export async function parseConversation(
   clientName: string,
   s: Settings
 ): Promise<{ from: 'client' | 'her'; text: string }[]> {
+  // 0) Formato "Nombre: mensaje" con los nombres configurados → determinista, sin IA.
+  const inline = parseInlineNames(raw, personaName, clientName)
+  if (inline && inline.length) return inline
+
   // 1) Segmentar por código (detecta la inicial del cliente, mantiene el orden).
-  const msgs = segmentChaturbate(raw, clientName)
+  const msgs = segmentChaturbate(raw, clientName, personaName)
   if (!msgs.length) return []
+
+  // Si aparecieron AMBOS nombres como marcadores, la atribución ya está resuelta.
+  if (msgs.some((m) => m.side)) {
+    return msgs.map((m) => ({ from: m.side === 'client' ? 'client' : 'her', text: m.text }))
+  }
+
   const hasMarks = msgs.some((m) => m.marked)
 
   // 2) Idioma de cada mensaje (best-effort: si falla, seguimos por iniciales).

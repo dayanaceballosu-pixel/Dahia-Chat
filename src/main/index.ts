@@ -17,8 +17,10 @@ interface ClientRow {
   messages: { from: 'client' | 'her'; text: string }[]
 }
 
-// Mantiene ~10 mensajes recientes tal cual; los anteriores se condensan en el resumen.
-const RECENT_WINDOW = 10
+// Mantiene ~16 mensajes recientes tal cual; los anteriores se condensan en el resumen.
+// (Debe ir a la par del slice(-16) del prompt: así el modelo ve el hilo completo
+// reciente y no repite ni pierde lo que ya se dijo.)
+const RECENT_WINDOW = 16
 const MIN_BATCH = 8
 
 async function maybeSummarize(clientId: string, s: Settings): Promise<void> {
@@ -38,6 +40,7 @@ async function maybeSummarize(clientId: string, s: Settings): Promise<void> {
 }
 
 function createWindow(): void {
+  const s = getSettings()
   mainWindow = new BrowserWindow({
     width: 1100,
     height: 780,
@@ -53,6 +56,10 @@ function createWindow(): void {
       contextIsolation: true
     }
   })
+
+  // El "pin" 📌: si lo dejó activado, la ventana arranca siempre encima.
+  // 'screen-saver' es el nivel más alto: queda sobre navegadores y apps normales.
+  if (s.alwaysOnTop) mainWindow.setAlwaysOnTop(true, 'screen-saver')
 
   mainWindow.on('ready-to-show', () => {
     mainWindow?.show()
@@ -173,6 +180,14 @@ app.whenReady().then(async () => {
   // IPC: versión de la app (para mostrarla en la UI)
   ipcMain.handle('app:version', () => app.getVersion())
 
+  // IPC: fijar/soltar la ventana siempre encima (el "pin" 📌). Se recuerda.
+  ipcMain.handle('window:setAlwaysOnTop', (_e, value: boolean) => {
+    mainWindow?.setAlwaysOnTop(!!value, 'screen-saver')
+    saveSettings({ alwaysOnTop: !!value })
+    return !!value
+  })
+  ipcMain.handle('window:getAlwaysOnTop', () => getSettings().alwaysOnTop)
+
   // IPC: configuración
   ipcMain.handle('settings:get', () => getSettings())
   ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => saveSettings(patch))
@@ -269,11 +284,22 @@ app.whenReady().then(async () => {
     const client = db.getClient(clientId) as { username?: string } | null
     if (!client) return { error: 'client-not-found' }
     try {
-      const msgs = await ai.parseConversation(raw, s.personaName, client.username || '', s)
+      // Su nombre en la plataforma (si lo configuró) ayuda a separar quién dijo qué.
+      const herName = (s.platformName || '').trim() || s.personaName
+      const msgs = await ai.parseConversation(raw, herName, client.username || '', s)
       ai.takeUsage()
       if (!msgs.length) return { error: 'parse-empty' }
-      db.importMessages(clientId, msgs)
-      return { count: msgs.length }
+      // Si la conversación termina con mensajes del CLIENTE sin responder, se separan:
+      // van al cajón como "mensaje entrante" para generarle la respuesta de una vez.
+      let pendingEnd = msgs.length
+      while (pendingEnd > 0 && msgs[pendingEnd - 1].from === 'client') pendingEnd--
+      const pending = msgs
+        .slice(pendingEnd)
+        .map((m) => m.text)
+        .join('\n')
+      const toImport = pending ? msgs.slice(0, pendingEnd) : msgs
+      if (toImport.length) db.importMessages(clientId, toImport)
+      return { count: toImport.length, pending: pending || undefined }
     } catch (err) {
       return { error: (err as Error).message || 'import-error' }
     }
